@@ -62,8 +62,8 @@ instead of one long vertical stack.
 - Put helper functions, classes, and other reusable definitions in their own
   cells below the data-loading cells, still in the first column.
 - Reserve the last column as empty breathing room. In a new three-column
-  notebook, add a markdown cell in the third column whose content is exactly
-  `leave space`.
+  notebook, make the first cell in the third column a `column=2` cell whose
+  content is exactly `leave space`.
 - marimo column numbers are zero-indexed. In a new three-column notebook, the
   first column is the implicit starting column `0`, so the center analysis
   column should usually start at `column=1` and the spacer column at
@@ -138,6 +138,9 @@ Do not treat one without the other.
   column and `column=2` for the spacer column.
 - If markdown is involved, remember that the first cell in a saved visual
   column should still be a Python cell.
+- For the default spacer column, do not create a placeholder assignment such as
+  `spacer_column = 2`. Instead, make the first `column=2` cell itself render
+  the markdown `leave space`.
 - After editing, verify that prose, tables, widgets, and charts still read in
   the intended sequence.
 
@@ -210,6 +213,10 @@ other notebook-wide initialization so dependencies are obvious and stable.
 
 - Import stdlib, third-party, and project modules in the setup cell.
 - Put constants, shared paths, and other notebook-wide initialization there.
+- Define setup constants in upper snake case, especially shared paths such as
+  `REPO_ROOT` or `DATA_PATH`.
+- Leave exactly one empty line between the final import block and the first
+  constant definition in the setup cell.
 - Do not model setup as a normal `@app.cell` just because it is the first cell.
 - Downstream cells can refer to setup definitions directly; do not add
   `return` plumbing just to thread setup imports through the graph.
@@ -222,18 +229,34 @@ with app.setup:
     from pathlib import Path
 
     FIGURES_DIR = Path(__file__).resolve().parent / "figures"
+    DATA_PATH = Path(__file__).resolve().parent / "data"
 ```
 
-### Script mode detection
+### Script check and action cell
 
-Use `mo.app_meta().mode == "script"` to distinguish CLI execution from
-interactive use:
+Handle script-only behavior in one hidden cell placed directly below the
+`leave space` cell.
+
+- Do not create a global `is_script_mode` variable just to thread mode through
+  the graph.
+- Put the full script-only branch in that single hidden cell using
+  `if mo.app_meta().mode == "script":`.
+- Keep normal interactive notebook structure outside that cell.
+- If the script path should display something, assign it to a local variable
+  and make that variable the unnested final expression of the cell.
 
 ```python
-@app.cell
-def _(mo):
-    is_script_mode = mo.app_meta().mode == "script"
-    return (is_script_mode,)
+@app.cell(hide_code=True)
+def _():
+    script_output = None
+    if mo.app_meta().mode == "script":
+        script_output = {
+            "mode": "script",
+            "notebook_path": NOTEBOOK_PATH.relative_to(REPO_ROOT),
+            "package_root": PACKAGE_ROOT.relative_to(REPO_ROOT),
+        }
+    script_output
+    return
 ```
 
 ### UI and reactivity rules
@@ -248,6 +271,13 @@ def _(mo):
 - When a notebook already displays the object under test, prefer updating that
   existing final expression in place instead of splitting parsing and display
   into extra cells.
+- If one cell builds an object and a later cell only displays that object,
+  combine them into a single cell.
+- If the built object is not used anywhere else in the notebook, do not create
+  a global for it; make the builder cell produce the object directly as its
+  final output.
+- If the built object is used elsewhere, keep the global definition in that
+  same cell and make that variable the final output of the builder cell.
 
 ### Output and markdown rules
 
@@ -257,11 +287,76 @@ def _(mo):
 - Standalone markdown cells are fine.
 - In multicolumn notebooks, markdown cells often serve a layout role as well as
   a content role. Preserve their placement carefully.
+- If markdown describes a general section or column, put it at the top of that
+  column unless there is a strong reason to co-locate it with a specific
+  output.
+- For general section headers, use a heading-only cell with heading level 2:
+  `## Heading`.
+- Put the non-heading paragraph text for a general section in a separate cell
+  immediately below the heading cell.
+- If markdown is referring to a specific code block or output, prefer keeping
+  that text in the same cell as the output with
+  `mo.vstack([mo.md(...), output])`.
+- Do not apply the heading/paragraph split to the special spacer cell whose
+  content is exactly `leave space`.
+
+```python
+@app.cell(column=1, hide_code=True)
+def _():
+    mo.md(r"""
+    ## Section Title
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    Short description for the column or section.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(result):
+    mo.vstack(
+        [
+            mo.md(r"""
+            Text that refers specifically to the output below.
+            """),
+            result,
+        ]
+    )
+    return
+```
+
+Prefer building and displaying objects in the same cell:
+
+```python
+@app.cell(hide_code=True)
+def _():
+    DemoObject(name="example")
+    return
+```
+
+If the object is needed elsewhere, define it and display it in the same cell:
+
+```python
+@app.cell(hide_code=True)
+def _():
+    result = DemoObject(name="example")
+    result
+    return (result,)
+```
+
+Use a plain markdown-only cell only when the markdown stands on its own:
 
 ```python
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md("# Section Title\n\nShort description.")
+    mo.md(r"""
+    ## Section Title
+    """)
     return
 ```
 
