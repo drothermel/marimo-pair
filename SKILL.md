@@ -54,9 +54,10 @@ instead of one long vertical stack.
 
 - Default to `app = marimo.App(width="columns")` unless the notebook is truly a
   simple scratchpad.
-- Create a setup cell at the top of the first column. Put `import marimo as mo`
-  there along with the notebook's other imports, configuration, shared
-  constants, and stable helpers that belong in setup.
+- Create a real marimo setup cell at the top of the first column using
+  `with app.setup:`. Put `import marimo as mo` there along with the notebook's
+  other imports, configuration, shared constants, and stable helpers that
+  belong in setup.
 - Put data loading directly below the setup cell in the first column.
 - Put helper functions, classes, and other reusable definitions in their own
   cells below the data-loading cells, still in the first column.
@@ -204,21 +205,23 @@ EOF
 
 ### Setup cell
 
-Put notebook imports in a single setup cell so dependencies are obvious and
-stable.
+Use marimo's real setup block, `with app.setup:`, for notebook imports and
+other notebook-wide initialization so dependencies are obvious and stable.
 
 - Import stdlib, third-party, and project modules in the setup cell.
-- Return imported modules and functions from setup, then pass them as cell
-  arguments.
+- Put constants, shared paths, and other notebook-wide initialization there.
+- Do not model setup as a normal `@app.cell` just because it is the first cell.
+- Downstream cells can refer to setup definitions directly; do not add
+  `return` plumbing just to thread setup imports through the graph.
 - Avoid scattering imports across many cells.
 
 ```python
-@app.cell
-def _():
+with app.setup:
     import marimo as mo
     import matplotlib.pyplot as plt
     from pathlib import Path
-    return mo, plt, Path
+
+    FIGURES_DIR = Path(__file__).resolve().parent / "figures"
 ```
 
 ### Script mode detection
@@ -321,6 +324,11 @@ changes only. Use `run_cell` to queue execution.
 When you edit a running notebook through `code_mode`, updating the live session
 is separate from persisting the `.py` file. Treat the live session and the
 saved file as different states until save succeeds.
+
+If the user specifically wants a true `with app.setup:` block and the notebook
+does not already have one, prefer a file-level edit. The `code_mode` save path
+works in terms of ordinary cells and may not synthesize a real setup block from
+live cell state alone.
 
 The most reliable save path from inside the kernel is to build a
 `SaveNotebookRequest` from the live `ctx.cells` and hand it to
