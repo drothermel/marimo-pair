@@ -376,6 +376,28 @@ async with cm.get_context() as ctx:
 Use this to identify explicit anchors, runs of inherited cells, and empty or
 hidden cells acting as layout separators.
 
+## Related Repos and Libraries
+
+Treat the sibling repos in the parent `repos` directory as part of the normal
+exploration surface for marimo work.
+
+- Default search root: the parent of the current repo, which is typically the
+  shared `repos` directory.
+- First inspect local sibling repos before guessing an API or reimplementing a
+  component.
+- If a repo is missing locally, GitHub inspection is fine, and cloning into the
+  shared `repos` directory is an acceptable fallback.
+- Use these repos as sources of utilities, components, notebook patterns,
+  debugging clues, and alternative implementation ideas.
+- Prefer reading real source over relying on memory for these libraries.
+- Do not assume a library is installed in the notebook environment just because
+  its repo exists locally. Verify imports before depending on it.
+- When borrowing a pattern from another repo, preserve the notebook's current
+  structure and UX unless the user asks for a redesign.
+
+See [ecosystem-repos.md](reference/ecosystem-repos.md) for the current repo map
+and when to reach for each one.
+
 ## Editing Workflow When Columns Matter
 
 Use this workflow when the notebook already has columns or should gain them.
@@ -471,3 +493,4 @@ allowlist if repeated prompts are a problem:
 - [gotchas.md](reference/gotchas.md) — cached module proxies and other traps
 - [rich-representations.md](reference/rich-representations.md) — custom widgets and visualizations
 - [notebook-improvements.md](reference/notebook-improvements.md) — improving existing notebooks
+- [ecosystem-repos.md](reference/ecosystem-repos.md) — sibling repos and GitHub sources to inspect for utilities, components, and debugging
