@@ -164,6 +164,16 @@ uvx marimo check <notebook.py>
 
 Run `marimo check` before handing notebook work back to the user.
 
+### How to invoke marimo
+
+Only servers started with `--no-token` register in the local server registry
+and are auto-discoverable — starting without a token makes discovery easier.
+If a server has a token, set the `MARIMO_TOKEN` environment variable before
+calling the execute script (avoids leaking the token in process listings). The
+right way to invoke marimo depends on context (project
+tooling, global install, sandbox mode). See
+[finding-marimo.md](reference/finding-marimo.md) for the full decision tree.
+
 **Do NOT use `--headless` unless the user asks for it.** Omitting it lets
 marimo auto-open the browser, which is the expected pairing experience. If the
 user explicitly requests headless, offer to open `http://localhost:<port>`
@@ -415,7 +425,7 @@ import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
     cid = ctx.create_cell("x = 1", name="_")
-    ctx.packages.add("pandas")
+    ctx.install_packages("pandas")
     ctx.run_cell(cid)
 ```
 
@@ -448,7 +458,9 @@ okay, but content may lag the live kernel; prefer `ctx.cells[target].code`.)
 
 When you edit a running notebook through `code_mode`, updating the live session
 is separate from persisting the `.py` file. Treat the live session and the
-saved file as different states until save succeeds.
+saved file as different states until save succeeds. If the task requires the
+notebook file on disk to change, perform an explicit save step after your
+edits.
 
 If the user specifically wants a true `with app.setup:` block and the notebook
 does not already have one, prefer a file-level edit. The `code_mode` save path
@@ -517,8 +529,13 @@ async with cm.get_context() as ctx:
     ]
 ```
 
-Use this to identify explicit anchors, runs of inherited cells, and empty or
-hidden cells acting as layout separators.
+Use this to identify:
+
+- explicit column anchors
+- runs of inherited cells
+- empty or hidden cells that are acting as layout separators
+
+If you are about to insert or reorder cells, inspect this first.
 
 ## Related Repos and Libraries
 
@@ -582,7 +599,7 @@ either approach.
 
 Skip these and the notebook breaks:
 
-- Install packages via `ctx.packages.add()`, not `uv add` or `pip`, when
+- Install packages via `ctx.install_packages()`, not `uv add` or `pip`, when
   you are mutating a live notebook session. The code API handles kernel
   restarts and dependency resolution correctly.
 - Never write to the notebook `.py` file directly while a live session owns it.
