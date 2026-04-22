@@ -63,6 +63,10 @@ instead of one long vertical stack.
 - Reserve the last column as empty breathing room. In a new three-column
   notebook, add a markdown cell in the third column whose content is exactly
   `leave space`.
+- marimo column numbers are zero-indexed. In a new three-column notebook, the
+  first column is the implicit starting column `0`, so the center analysis
+  column should usually start at `column=1` and the spacer column at
+  `column=2`.
 - Do not put anything else in the last column unless the user explicitly wants
   a different layout.
 - Put displays, exploratory outputs, and heavier or more situational
@@ -101,12 +105,17 @@ styling.
 marimo's column model is sparse and order-dependent:
 
 - `marimo.App(width="columns")` enables true multicolumn rendering.
+- Column numbers are zero-indexed. The notebook starts in implicit column `0`
+  until a later cell introduces a new explicit anchor.
 - The first cell of a visual column typically carries explicit `column=N`.
 - Cells with no explicit column inherit the previous cell's column.
 - Reordering cells can therefore change layout even if column metadata is
   unchanged.
 - Saved notebook configs are typically sparse: only column-boundary cells need
   explicit markers.
+- Skipping a column number creates an empty visual lane. For example, in a new
+  notebook, anchoring cells at `column=2` and `column=3` yields four visual
+  columns: implicit `0`, empty `1`, explicit `2`, explicit `3`.
 
 When mutating a notebook, reason about both:
 
@@ -124,6 +133,8 @@ Do not treat one without the other.
   without `column=` so it inherits naturally.
 - If you start a new visual column, make the first cell a Python cell with
   explicit `column=N`.
+- In a fresh three-column layout, that usually means `column=1` for the center
+  column and `column=2` for the spacer column.
 - If markdown is involved, remember that the first cell in a saved visual
   column should still be a Python cell.
 - After editing, verify that prose, tables, widgets, and charts still read in
