@@ -31,6 +31,75 @@ to the running notebook.
 - **Stay focused.** Build first, polish later — cell names, layout, and styling
   can wait.
 
+## Column Discipline
+
+For users who care about notebook presentation, column structure is a primary
+constraint. Treat it as part of the notebook's architecture, not as incidental
+styling.
+
+- Before editing, inspect the notebook's current column layout and preserve it
+  unless the user explicitly wants a redesign.
+- When adding cells, decide whether the new content belongs in an existing
+  column or starts a new one.
+- When working in a notebook that already uses columns, do not casually insert
+  cells in ways that collapse or scramble the visual story.
+- When building a notebook from scratch, prefer an intentional multicolumn
+  structure when the notebook mixes narrative, controls, summaries, and plots.
+- Assume spacer cells, hidden markdown, and summary blocks may be deliberate
+  layout anchors.
+
+### Technical model you must follow
+
+marimo's live layout is reconstructed from flat cell order plus sparse
+`config.column` anchors:
+
+- `marimo.App(width="columns")` enables true multicolumn rendering.
+- The first cell of a visual column typically carries explicit `column=N`.
+- Cells with `column=None` inherit the previous cell's column.
+- Reordering cells can therefore change layout even if column metadata is
+  unchanged.
+- Saved notebook configs are typically sparse: only column-boundary cells need
+  explicit markers.
+
+When mutating a live notebook, reason about both:
+
+- cell order
+- column anchors
+
+Do not treat one without the other.
+
+## Quickstart for New Notebooks
+
+When setting up a new notebook, default to a deliberate left-to-right structure
+instead of building one long column and cleaning it up later.
+
+1. Create a setup cell at the top of the first column. Put `import marimo as mo`
+   there along with the notebook's other imports, configuration, and shared
+   constants.
+2. Put data loading directly below the setup cell in the first column.
+3. Put helper functions, classes, and other reusable definitions in their own
+   cells below the data-loading cells, still in the first column.
+4. Reserve the last column as empty breathing room. In a new three-column
+   notebook, add a markdown cell in the third column whose content is exactly
+   `leave space`.
+5. Do not put anything else in the last column unless the user explicitly wants
+   a different layout.
+6. Put displays, exploratory outputs, and heavier or more situational
+   computations in the center columns only: the second through second-to-last
+   columns.
+7. Keep each center column bounded. A column should contain at most a few
+   screens' worth of cells before you start a new column or simplify the
+   presentation.
+
+This structure keeps the notebook readable:
+
+- first column = durable foundations
+- center columns = analysis and presentation
+- last column = visual margin
+
+Use this as the default notebook design process unless the existing notebook or
+the user's request clearly calls for something else.
+
 ## Prerequisites
 
 ### How to invoke marimo
@@ -155,7 +224,7 @@ import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
     cid = ctx.create_cell("x = 1")
-    ctx.packages.add("pandas")
+    ctx.install_packages("pandas")
     ctx.run_cell(cid)
 ```
 
@@ -176,25 +245,95 @@ changes only — use `run_cell` to queue execution.
 structural changes. You also have access to marimo internals from the kernel,
 but treat that as a last resort and only with high confidence after exploration.
 
+### Saving Notebook Changes
+
+`ctx.create_cell(...)` and `ctx.edit_cell(...)` update the **live notebook
+session**, but they do **not** necessarily persist those edits back to the
+`.py` file immediately. If the task requires the notebook file on disk to
+change, perform an explicit save step after your edits.
+
+The most reliable save path from inside the kernel is to build a
+`SaveNotebookRequest` from the live `ctx.cells` and hand it to
+`AppFileManager`:
+
+```python
+import marimo._code_mode as cm
+from marimo._server.models.models import SaveNotebookRequest
+from marimo._session.notebook.file_manager import AppFileManager
+
+async with cm.get_context() as ctx:
+    manager = AppFileManager(ctx.globals["__file__"])
+    request = SaveNotebookRequest(
+        cell_ids=[cell.id for cell in ctx.cells],
+        codes=[cell.code for cell in ctx.cells],
+        names=[cell.name for cell in ctx.cells],
+        configs=[cell.config for cell in ctx.cells],
+        filename=ctx.globals["__file__"],
+        layout=None,
+        persist=True,
+    )
+    manager.save(request)
+```
+
+Important details:
+
+- Use the code from `ctx.cells` when saving; that is the authoritative live
+  notebook state.
+- `cell.code` is the raw notebook cell body. Do **not** include generated
+  wrapper code or notebook-file `return` statements when calling `edit_cell`.
+- A direct HTTP call to `/api/files/save` may fail with `401` unless you also
+  reproduce the frontend's authenticated session. Prefer the in-kernel
+  `AppFileManager(...).save(...)` path.
+- When column layout matters, preserve the live `cell.config` values from
+  `ctx.cells` when saving. Do not rebuild configs loosely or you may strip the
+  notebook's intended column anchors.
+
 **UI state lives outside the reactive graph.** Anywidget traitlets can be read
 or set directly (e.g., `slider.value = 5`). For `mo.ui.*` elements, use
 `ctx.set_ui_value(element, new_value)` inside `code_mode`.
 
 ### First Step: Explore the API
 
-The `code_mode` API can change between marimo versions. Explore it at the
-start of each session — dig deeper into anything you're unsure about.
+The `code_mode` API can change between marimo versions — and each running
+server could be a different version. Inspect what's available at the start of
+each session, especially when switching between servers.
 
 ```python
 import marimo._code_mode as cm
-help(cm)
+
+async with cm.get_context() as ctx:
+    ctx  # inspect me — dir(), help(), .cells, ...
 ```
+
+When layout matters, explicitly inspect column structure early. For example:
+
+```python
+import marimo._code_mode as cm
+
+async with cm.get_context() as ctx:
+    [
+        {
+            "id": cell.id,
+            "name": cell.name,
+            "column": getattr(cell.config, "column", None),
+        }
+        for cell in ctx.cells
+    ]
+```
+
+Use this to identify:
+
+- explicit column anchors
+- runs of inherited cells
+- empty or hidden cells that are acting as layout separators
+
+If you are about to insert or reorder cells, inspect this first.
 
 ## Guard Rails
 
 Skip these and the UI breaks:
 
-- **Install packages via `ctx.packages.add()`, not `uv add` or `pip`.**
+- **Install packages via `ctx.install_packages()`, not `uv add` or `pip`.**
   The code API handles kernel restarts and dependency resolution correctly.
   Only fall back to external CLIs if the API is unavailable or fails.
 - **Custom widget = anywidget.** For bespoke visual components, use anywidget
@@ -206,6 +345,37 @@ Skip these and the UI breaks:
   than creating new ones. Clean up any cells that end up empty after edits.
 - **Don't worry about cell names.** Most cells don't need explicit names —
   see [notebook-improvements.md](reference/notebook-improvements.md#cell-names).
+- **Do not destroy column anchors accidentally.** If a cell is the first cell in
+  a visual column, moving or deleting it can regroup many downstream cells.
+- **Do not assign `column=` mechanically to every new cell.** In most cases,
+  inheriting the surrounding column is the correct behavior.
+- **Do not create a new column with a markdown cell anchor.** Use a Python cell
+  as the first cell in that column.
+- **Do not reorder cells without checking inherited column effects.** Flat order
+  is part of the layout model.
+
+## Editing Workflow When Columns Matter
+
+Use this workflow when the notebook already has columns or should gain them.
+
+1. Inspect `ctx.cells` and record each cell's `id`, `name`, and `config.column`.
+2. Identify which cells are explicit column anchors and which cells inherit.
+3. Decide whether your new content belongs:
+   in an existing column,
+   as a new anchor starting a new column,
+   or as a replacement for an existing anchor/spacer cell.
+4. Prefer editing an existing empty or placeholder cell inside the target
+   column before creating a new cell.
+5. If you create a new cell inside an existing column, usually leave its column
+   unset so it inherits naturally.
+6. If you create a new visual column, make the first cell a Python cell with
+   explicit `column=N`.
+7. After mutations, re-inspect the live cell list and confirm the anchors still
+   imply the intended layout.
+8. Save using the live `ctx.cells` configs.
+
+When the user specifically values layout, this verification is required, not
+optional.
 
 ## Widgets and Reactivity
 
@@ -224,7 +394,7 @@ Read [rich-representations.md](reference/rich-representations.md) before wiring 
 - **Deletions are destructive.** Deleting a cell removes its variables from
   kernel memory — restoring means recreating the cell and re-running it and
   its dependents. If intent seems ambiguous, ask first.
-- **Installing packages changes the project.** `ctx.packages.add()` adds
+- **Installing packages changes the project.** `ctx.install_packages()` adds
   real dependencies — confirm when it's not obvious from context.
 
 ## References
