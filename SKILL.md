@@ -164,6 +164,11 @@ uvx marimo check <notebook.py>
 
 Run `marimo check` before handing notebook work back to the user.
 
+**Do NOT use `--headless` unless the user asks for it.** Omitting it lets
+marimo auto-open the browser, which is the expected pairing experience. If the
+user explicitly requests headless, offer to open `http://localhost:<port>`
+in their browser (`open` on macOS, `xdg-open` on Linux, `start` on Windows).
+
 ## How to Discover Servers and Execute Code
 
 Two operations: **discover servers** and **execute code**.
@@ -175,10 +180,16 @@ Two operations: **discover servers** and **execute code**.
 | Execute code (multiline) | `bash scripts/execute-code.sh <<'EOF'` | same |
 | Execute code (by URL) | `bash scripts/execute-code.sh --url http://localhost:2718 -c "code"` | same (with `url` param) |
 
-Scripts auto-discover sessions from the local server registry. Use `--port` to
-target a specific server when multiple are running, `--session` to target a
-specific session when multiple notebooks are open on the same server, or
-`--url` to skip discovery and connect directly.
+Scripts auto-discover sessions from the local server registry. Use
+`--port` to target a specific server when multiple are running,
+`--session` to target a specific session when multiple notebooks are
+open on the same server, or `--url` to skip discovery and connect to a
+server by URL (e.g. `--url http://localhost:2718`). **On Windows, prefer
+direct `--url` when registry discovery is empty** — see the next section
+for why. Set the `MARIMO_TOKEN` env var to authenticate when the server
+has token auth enabled (`--token` flag also works but exposes the token
+in process listings). If the server was started with `--mcp`, you'll
+have MCP tools available as an alternative.
 
 Only servers started with `--no-token` register in the local server registry.
 If discovery comes up empty, the server likely has token auth. Ask the user for
@@ -188,6 +199,10 @@ execute script so the token does not leak in process listings.
 **Always discover before starting.** Background-task completion messages do not
 mean the server died. If no servers are found and the user wants a notebook,
 start one as a background task so the session gets cleaned up automatically.
+
+On **Windows (Git Bash / MSYS2)**, discovery can also come up empty even for
+a running `--no-token` server. If the user confirms marimo is reachable
+locally, fall back to `--url http://127.0.0.1:<port>` (ask for the port).
 
 If there is no notebook file yet, pick a descriptive filename from context
 instead of asking.
