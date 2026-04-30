@@ -415,7 +415,7 @@ import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
     cid = ctx.create_cell("x = 1", name="_")
-    ctx.install_packages("pandas")
+    ctx.packages.add("pandas")
     ctx.run_cell(cid)
 ```
 
@@ -438,6 +438,13 @@ but reassigns every cell ID — re-inspect `ctx.cells` before further edits or
 you will hit `KeyError` on stale IDs.
 
 ## Saving Notebook Changes
+
+**Edit cells through `code_mode`, never the file system. Direct file writes
+are silently lost.** It is tempting to reach for `Edit`/`Write` for a small
+tweak since `edit_cell` requires the full new cell body. Don't — without
+`--watch` (off by default) the kernel never sees those edits and overwrites
+them on its next save, so the user sees nothing. (`Read` on the `.py` is
+okay, but content may lag the live kernel; prefer `ctx.cells[target].code`.)
 
 When you edit a running notebook through `code_mode`, updating the live session
 is separate from persisting the `.py` file. Treat the live session and the
@@ -575,13 +582,19 @@ either approach.
 
 Skip these and the notebook breaks:
 
-- Install packages via `ctx.install_packages()`, not `uv add` or `pip`, when
-  you are mutating a live notebook session.
+- Install packages via `ctx.packages.add()`, not `uv add` or `pip`, when
+  you are mutating a live notebook session. The code API handles kernel
+  restarts and dependency resolution correctly.
 - Never write to the notebook `.py` file directly while a live session owns it.
+  Without `--watch`, the kernel will not see those edits and may overwrite them
+  on its next save. Use `ctx.edit_cell(target, code=...)` with the full new
+  cell body.
 - No temp-file dependencies in notebook cells. `pathlib.Path("/tmp/...")` in
   notebook code is usually a bug.
 - Avoid empty cells. Prefer `edit_cell` into an existing empty cell rather than
   creating new ones.
+- Most cells do not need explicit names. See
+  [notebook-improvements.md](reference/notebook-improvements.md#cell-names).
 - Do not destroy column anchors accidentally.
 - Do not assign `column=` mechanically to every new cell.
 - Do not reorder cells without checking inherited-column effects.
