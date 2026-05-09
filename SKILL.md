@@ -399,7 +399,7 @@ packages, and run cells — use `marimo._code_mode`:
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    cid = ctx.create_cell("x = 1")
+    cid = ctx.create_cell("x = 1", name="_")
     ctx.install_packages("pandas")
     ctx.run_cell(cid)
 ```
@@ -413,6 +413,14 @@ wrap calls in `asyncio.run(...)`.
 
 **Cells are not auto-executed.** `create_cell` and `edit_cell` are structural
 changes only. Use `run_cell` to queue execution.
+
+**Always pass a valid `name` to `create_cell`, usually `name="_"`.** Without a
+name, the live cell is fine but the codegen falls back to
+`app._unparsable_cell(...)` on save. See
+[gotchas.md](reference/gotchas.md#create_cell-without-name-produces-unparsable-cells-on-save).
+If unparsable cells already got written, marimo recovers them on session reload
+but reassigns every cell ID — re-inspect `ctx.cells` before further edits or
+you will hit `KeyError` on stale IDs.
 
 ## Saving Notebook Changes
 

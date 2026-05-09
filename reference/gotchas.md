@@ -64,3 +64,36 @@ _frame_mod.pa = _pa
 ```
 
 Then re-run the failing cell.
+
+## `create_cell` without `name=` produces unparsable cells on save
+
+When you call `ctx.create_cell(code)` without passing `name=`, the new cell's
+name is empty. The live session is fine, but on save the codegen tries to emit
+`def ():` (no identifier), fails with `invalid syntax`, and falls back to
+writing the cell as `app._unparsable_cell(r"""...""")` instead of a normal
+`@app.cell` function.
+
+You'll see warnings like:
+
+```
+Generated code for cell  is invalid, falling back to unparsable cell.
+Error: invalid syntax (<unknown>, line 2)
+```
+
+**Always pass `name="_"`** (or another valid identifier) when creating cells:
+
+```python
+ctx.create_cell(code, after="PKri", hide_code=True, name="_")
+```
+
+**Recovery if it already happened:** marimo can re-parse `_unparsable_cell`
+blocks on session reload, but **every cell ID changes** in the process, so any
+cell IDs you captured earlier in the session become stale. Re-inspect
+`ctx.cells` to get the new IDs before further edits, then re-save with the
+recovered live state.
+
+Symptoms of operating on stale IDs after a reload:
+
+```
+KeyError: "Cell 'ZOWR' not found in notebook or pending adds"
+```
