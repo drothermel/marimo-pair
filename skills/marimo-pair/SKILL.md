@@ -63,7 +63,7 @@ instead of one long vertical stack.
   cells below the data-loading cells, still in the first column.
 - Reserve the last column as empty breathing room. In a new three-column
   notebook, make the first cell in the third column a `column=2` cell whose
-  content is exactly `leave space`.
+  content is exactly `(leave space)`.
 - marimo column numbers are zero-indexed. In a new three-column notebook, the
   first column is the implicit starting column `0`, so the center analysis
   column should usually start at `column=1` and the spacer column at
@@ -99,8 +99,7 @@ For an empty or stub notebook, implement the standard scaffold immediately:
 - `import marimo as mo`
 - shared path constants such as `NOTEBOOK_PATH` and `REPO_ROOT`
 - a center analysis column starting at `column=1`
-- a spacer column at `column=2` whose markdown content is exactly `leave space`
-- a hidden script-mode output cell directly below the spacer cell
+- a spacer column at `column=2` whose markdown content is exactly `(leave space)`
 - `if __name__ == "__main__": app.run()`
 
 Do not infer domain-specific notebook content, query APIs, or exploratory
@@ -161,7 +160,7 @@ Do not treat one without the other.
   column should still be a Python cell.
 - For the default spacer column, do not create a placeholder assignment such as
   `spacer_column = 2`. Instead, make the first `column=2` cell itself render
-  the markdown `leave space`.
+  the markdown `(leave space)`.
 - After editing, verify that prose, tables, widgets, and charts still read in
   the intended sequence.
 
@@ -278,16 +277,15 @@ with app.setup:
     DATA_PATH = Path(__file__).resolve().parent / "data"
 ```
 
-### Script check and action cell
+### Optional script output cell
 
-Handle script-only behavior in one hidden cell placed directly below the
-`leave space` cell.
+Do not add a script-output cell to a standard template notebook by default.
+When the user explicitly asks for script-mode output, keep that behavior in one
+hidden cell using `if mo.app_meta().mode == "script":`.
 
 - Do not create a global `is_script_mode` variable just to thread mode through
   the graph.
-- Put the full script-only branch in that single hidden cell using
-  `if mo.app_meta().mode == "script":`.
-- Keep normal interactive notebook structure outside that cell.
+- Keep normal interactive notebook structure outside the script-output cell.
 - If the script path should display something, assign it to a local variable
   and make that variable the unnested final expression of the cell.
 
@@ -344,7 +342,7 @@ def _():
   that text in the same cell as the output with
   `mo.vstack([mo.md(...), output])`.
 - Do not apply the heading/paragraph split to the special spacer cell whose
-  content is exactly `leave space`.
+  content is exactly `(leave space)`.
 
 ```python
 @app.cell(column=1, hide_code=True)
