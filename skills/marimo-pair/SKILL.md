@@ -86,6 +86,27 @@ The default visual model is:
 Use a small number of intentional lanes rather than many weakly justified
 columns.
 
+## Standard Template Requests
+
+When the user asks to "set up", "scaffold", "bootstrap", or "create" a notebook
+"according to my standard template", treat that as an explicit request to apply
+this skill's Quickstart for New Notebooks.
+
+For an empty or stub notebook, implement the standard scaffold immediately:
+
+- `app = marimo.App(width="columns")`
+- a real `with app.setup:` block
+- `import marimo as mo`
+- shared path constants such as `NOTEBOOK_PATH` and `REPO_ROOT`
+- a center analysis column starting at `column=1`
+- a spacer column at `column=2` whose markdown content is exactly `leave space`
+- a hidden script-mode output cell directly below the spacer cell
+- `if __name__ == "__main__": app.run()`
+
+Do not infer domain-specific notebook content, query APIs, or exploratory
+analysis unless the user explicitly asks for it. After editing, run
+`uvx marimo check <notebook.py>`.
+
 ## Column Discipline
 
 For users who care about notebook presentation, column structure is a primary
