@@ -29,6 +29,21 @@ do later.
 - **Keep notebooks simple.** Show UI elements consistently, let reactivity do
   its job, and avoid control-flow scaffolding that fights the notebook model.
 
+## Scope Discipline
+
+Implement only what the user requested.
+
+- Do not add extra visualizations, dataframes, tables, widgets, helper
+  functions, summary views, exploratory sections, or convenience controls unless
+  the user explicitly asks for them or they are necessary to execute the exact
+  request.
+- When translating behavior from another file into a notebook, preserve the
+  source behavior's scope. Do not expand logs, summaries, or parsed objects
+  into additional notebook views unless requested.
+- If an obvious extra view or helper would make the notebook nicer, mention it
+  as a possible follow-up after completing the requested change instead of
+  implementing it proactively.
+
 ## Two Working Modes
 
 Use the right mental model for the job:
@@ -59,8 +74,11 @@ instead of one long vertical stack.
   other imports, configuration, shared constants, and stable helpers that
   belong in setup.
 - Put data loading directly below the setup cell in the first column.
-- Put helper functions, classes, and other reusable definitions in their own
-  cells below the data-loading cells, still in the first column.
+- Put every notebook-level function definition in its own cell below the
+  data-loading cells, still in the first column. Do not group multiple
+  `def` statements in one cell.
+- Put classes and other reusable definitions in their own cells below the
+  data-loading cells, still in the first column.
 - Reserve the last column as empty breathing room. In a new three-column
   notebook, make the first cell in the third column a `column=2` cell whose
   content is exactly `(leave space)`.
@@ -303,6 +321,14 @@ def _():
     return
 ```
 
+### Function cells
+
+- Put every notebook-level function definition in its own cell.
+- Do not group multiple `def` statements in a single cell, even when the
+  helpers are related.
+- Keep each function cell near the data or analysis section it supports, while
+  preserving the notebook's existing column structure.
+
 ### UI and reactivity rules
 
 - Show UI elements in both script and interactive modes. Change the data
@@ -403,6 +429,14 @@ def _(mo):
     """)
     return
 ```
+
+### Dataframe display
+
+- Dataframes generally render excellently as a cell's final expression.
+- Do not wrap a dataframe in `mo.ui.table` or `mo.ui.dataframe` unless the
+  table itself is specifically intended to interact with another reactive
+  element.
+- Prefer returning the dataframe directly for inspection-only outputs.
 
 ### Notebook hygiene
 
