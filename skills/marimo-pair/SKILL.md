@@ -29,6 +29,21 @@ do later.
 - **Keep notebooks simple.** Show UI elements consistently, let reactivity do
   its job, and avoid control-flow scaffolding that fights the notebook model.
 
+## Scope Discipline
+
+Implement only what the user requested.
+
+- Do not add extra visualizations, dataframes, tables, widgets, helper
+  functions, summary views, exploratory sections, or convenience controls unless
+  the user explicitly asks for them or they are necessary to execute the exact
+  request.
+- When translating behavior from another file into a notebook, preserve the
+  source behavior's scope. Do not expand logs, summaries, or parsed objects
+  into additional notebook views unless requested.
+- If an obvious extra view or helper would make the notebook nicer, mention it
+  as a possible follow-up after completing the requested change instead of
+  implementing it proactively.
+
 ## Two Working Modes
 
 Use the right mental model for the job:
@@ -59,11 +74,14 @@ instead of one long vertical stack.
   other imports, configuration, shared constants, and stable helpers that
   belong in setup.
 - Put data loading directly below the setup cell in the first column.
-- Put helper functions, classes, and other reusable definitions in their own
-  cells below the data-loading cells, still in the first column.
+- Put every notebook-level function definition in its own cell below the
+  data-loading cells, still in the first column. Do not group multiple
+  `def` statements in one cell.
+- Put classes and other reusable definitions in their own cells below the
+  data-loading cells, still in the first column.
 - Reserve the last column as empty breathing room. In a new three-column
   notebook, make the first cell in the third column a `column=2` cell whose
-  content is exactly `leave space`.
+  content is exactly `(leave space)`.
 - marimo column numbers are zero-indexed. In a new three-column notebook, the
   first column is the implicit starting column `0`, so the center analysis
   column should usually start at `column=1` and the spacer column at
@@ -85,6 +103,26 @@ The default visual model is:
 
 Use a small number of intentional lanes rather than many weakly justified
 columns.
+
+## Standard Template Requests
+
+When the user asks to "set up", "scaffold", "bootstrap", or "create" a notebook
+"according to my standard template", treat that as an explicit request to apply
+this skill's Quickstart for New Notebooks.
+
+For an empty or stub notebook, implement the standard scaffold immediately:
+
+- `app = marimo.App(width="columns")`
+- a real `with app.setup:` block
+- `import marimo as mo`
+- shared path constants such as `NOTEBOOK_PATH` and `REPO_ROOT`
+- a center analysis column starting at `column=1`
+- a spacer column at `column=2` whose markdown content is exactly `(leave space)`
+- `if __name__ == "__main__": app.run()`
+
+Do not infer domain-specific notebook content, query APIs, or exploratory
+analysis unless the user explicitly asks for it. After editing, run
+`uvx marimo check <notebook.py>`.
 
 ## Column Discipline
 
@@ -140,7 +178,7 @@ Do not treat one without the other.
   column should still be a Python cell.
 - For the default spacer column, do not create a placeholder assignment such as
   `spacer_column = 2`. Instead, make the first `column=2` cell itself render
-  the markdown `leave space`.
+  the markdown `(leave space)`.
 - After editing, verify that prose, tables, widgets, and charts still read in
   the intended sequence.
 
@@ -257,16 +295,15 @@ with app.setup:
     DATA_PATH = Path(__file__).resolve().parent / "data"
 ```
 
-### Script check and action cell
+### Optional script output cell
 
-Handle script-only behavior in one hidden cell placed directly below the
-`leave space` cell.
+Do not add a script-output cell to a standard template notebook by default.
+When the user explicitly asks for script-mode output, keep that behavior in one
+hidden cell using `if mo.app_meta().mode == "script":`.
 
 - Do not create a global `is_script_mode` variable just to thread mode through
   the graph.
-- Put the full script-only branch in that single hidden cell using
-  `if mo.app_meta().mode == "script":`.
-- Keep normal interactive notebook structure outside that cell.
+- Keep normal interactive notebook structure outside the script-output cell.
 - If the script path should display something, assign it to a local variable
   and make that variable the unnested final expression of the cell.
 
@@ -283,6 +320,14 @@ def _():
     script_output
     return
 ```
+
+### Function cells
+
+- Put every notebook-level function definition in its own cell.
+- Do not group multiple `def` statements in a single cell, even when the
+  helpers are related.
+- Keep each function cell near the data or analysis section it supports, while
+  preserving the notebook's existing column structure.
 
 ### UI and reactivity rules
 
@@ -323,7 +368,7 @@ def _():
   that text in the same cell as the output with
   `mo.vstack([mo.md(...), output])`.
 - Do not apply the heading/paragraph split to the special spacer cell whose
-  content is exactly `leave space`.
+  content is exactly `(leave space)`.
 
 ```python
 @app.cell(column=1, hide_code=True)
@@ -384,6 +429,14 @@ def _(mo):
     """)
     return
 ```
+
+### Dataframe display
+
+- Dataframes generally render excellently as a cell's final expression.
+- Do not wrap a dataframe in `mo.ui.table` or `mo.ui.dataframe` unless the
+  table itself is specifically intended to interact with another reactive
+  element.
+- Prefer returning the dataframe directly for inspection-only outputs.
 
 ### Notebook hygiene
 
