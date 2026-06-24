@@ -17,6 +17,12 @@ marimo re-executes downstream cells automatically. Treat notebook structure,
 layout, and display flow as part of the notebook's meaning, not as cleanup to
 do later.
 
+When a live session is running, the active runtime is the source of truth. The
+runtime holds the kernel namespace, cell state, and dataflow graph, and the
+notebook `.py` file is the artifact written from that state. Do not edit the
+file directly while a session owns it; use `marimo._code_mode` (`cm`) for
+notebook changes and prefer `ctx.cells[...]` over disk for current cell code.
+
 ## Philosophy
 
 - **Cells are the main lever.** Use them to structure work, debugging, reuse,
@@ -209,8 +215,11 @@ and are auto-discoverable — starting without a token makes discovery easier.
 If a server has a token, set the `MARIMO_TOKEN` environment variable before
 calling the execute script (avoids leaking the token in process listings). The
 right way to invoke marimo depends on context (project
-tooling, global install, sandbox mode). See
-[finding-marimo.md](reference/finding-marimo.md) for the full decision tree.
+tooling, global install, sandbox mode). If the notebook file contains a
+PEP 723 `# /// script` header, open it with `--sandbox` so marimo honors the
+inline dependencies. See [finding-marimo.md](reference/finding-marimo.md) for
+the full decision tree and [execution-context.md](reference/execution-context.md)
+for targeting, auth, and shell quoting.
 
 **Do NOT use `--headless` unless the user asks for it.** Omitting it lets
 marimo auto-open the browser, which is the expected pairing experience. If the
@@ -465,10 +474,15 @@ uv run python -c "import marimo as mo; help(mo.ui.form)"
 
 ## Executing Code in a Running Notebook
 
-Every execute-code call runs inside the notebook's kernel. All cell variables
-are in scope, but scratch definitions you create in that request do not persist
-between calls. Use execute-code to inspect, prototype, and validate before you
-commit changes to the notebook's real cell graph.
+Every execute-code call runs inside the notebook's kernel scratchpad: a
+temporary namespace with a shallow copy of kernel globals. All cell variables
+are in scope, but top-level bindings and rebindings you create in that request
+do not persist between calls. In-place mutations to notebook-owned objects can
+persist because those names still reference live objects.
+
+Use execute-code to inspect, prototype, and validate before you commit changes
+to the notebook's real cell graph. To persist new variables or notebook
+structure, submit changes through `marimo._code_mode`.
 
 To mutate the notebook's dataflow graph — create, edit, delete, install
 packages, and run cells — use `marimo._code_mode`:
@@ -478,7 +492,7 @@ import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
     cid = ctx.create_cell("x = 1", name="_")
-    ctx.install_packages("pandas")
+    ctx.packages.add("pandas")
     ctx.run_cell(cid)
 ```
 
@@ -492,6 +506,10 @@ wrap calls in `asyncio.run(...)`.
 **Cells are not auto-executed.** `create_cell` and `edit_cell` are structural
 changes only. Use `run_cell` to queue execution.
 
+`create_cell` currently defaults to `hide_code=True`, which collapses the code
+editor in the UI. Pass `hide_code=False` if the user wants created cells to be
+visible without manually expanding them.
+
 **Always pass a valid `name` to `create_cell`, usually `name="_"`.** Without a
 name, the live cell is fine but the codegen falls back to
 `app._unparsable_cell(...)` on save. See
@@ -499,6 +517,20 @@ name, the live cell is fine but the codegen falls back to
 If unparsable cells already got written, marimo recovers them on session reload
 but reassigns every cell ID — re-inspect `ctx.cells` before further edits or
 you will hit `KeyError` on stale IDs.
+
+### Marimo graph rules
+
+marimo imposes a small contract on notebook code so it can keep the notebook as
+a directed acyclic graph:
+
+- Cells cannot depend on each other in a cycle.
+- Each public name has one owning cell. Reassigning it in another cell fails
+  with `Multiply-defined names`; edit the owning cell or use a new name.
+- Wildcard imports are not allowed because they prevent static analysis.
+
+Use public names for values later cells should reference. Use private `_name`
+bindings or function locals for intermediates that no other cell should read.
+Private names are scoped to the cell that defines them.
 
 ## Saving Notebook Changes
 
@@ -652,7 +684,7 @@ either approach.
 
 Skip these and the notebook breaks:
 
-- Install packages via `ctx.install_packages()`, not `uv add` or `pip`, when
+- Install packages via `ctx.packages.add()`, not `uv add` or `pip`, when
   you are mutating a live notebook session. The code API handles kernel
   restarts and dependency resolution correctly.
 - Never write to the notebook `.py` file directly while a live session owns it.
@@ -710,7 +742,8 @@ allowlist if repeated prompts are a problem:
 ## References
 
 - [finding-marimo.md](reference/finding-marimo.md) — how to find and invoke the right marimo
-- [gotchas.md](reference/gotchas.md) — cached module proxies and other traps
+- [execution-context.md](reference/execution-context.md) — scripts, auth, startup, and shell quoting
+- [gotchas.md](reference/gotchas.md) — name redefinition, cached module proxies, and notebook traps
 - [rich-representations.md](reference/rich-representations.md) — custom widgets and visualizations
 - [notebook-improvements.md](reference/notebook-improvements.md) — improving existing notebooks
 - [ecosystem-repos.md](reference/ecosystem-repos.md) — sibling repos and GitHub sources to inspect for utilities, components, and debugging
